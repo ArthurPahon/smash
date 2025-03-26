@@ -1,0 +1,40 @@
+# Fichiers système
+.DS_Store
+Thumbs.db
+.directory
+
+# Fichiers d'éditeurs et d'IDE
+.idea/
+.vscode/
+*.sublime-*
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+
+# Fichiers de logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Fichiers de configuration locaux
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Fichiers Docker
+docker-compose.override.yml
+
+# Dossiers de données
+/data
+
+# Fichiers de dépendances et de build qui seraient dupliqués
+/node_modules
+
+# Autres
+/dist
+/build
+.coverage
