@@ -1,17 +1,19 @@
-from app.models.character import Character
-from app.models.match import Match, MatchParticipant
-from app.models.ranking import Ranking
-from app.models.tournament import Phase, Registration, Tournament
-from app.models.user import Role, User
+from app import db
+
+from .user import User, Role
+from .tournament import Tournament, Registration
+from .match import Match, Bracket
+from .character import Character
+from .ranking import Ranking, Classement
 
 __all__ = [
-    "User",
-    "Role",
-    "Tournament",
-    "Phase",
-    "Registration",
-    "Match",
-    "MatchParticipant",
-    "Character",
-    "Ranking",
+    'User',
+    'Role',
+    'Tournament',
+    'Registration',
+    'Match',
+    'Bracket',
+    'Character',
+    'Ranking',
+    'Classement'
 ]

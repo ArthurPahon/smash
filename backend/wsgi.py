@@ -2,8 +2,8 @@ import os
 
 from app import create_app
 
-# Configuration de l'environnement pour le mode sans base de données
-os.environ["FLASK_ENV"] = "development_no_db"
+# Configuration de l'environnement
+os.environ["FLASK_ENV"] = "development"
 
 # Création de l'application
 app = create_app()

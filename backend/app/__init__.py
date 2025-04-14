@@ -1,11 +1,14 @@
-import logging
 import os
+from dotenv import load_dotenv
 
 from flask import Flask
-from flask_cors import CORS
-from flask_jwt_extended import JWTManager
-from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
+from flask_cors import CORS
+
+# Chargement des variables d'environnement
+load_dotenv()
 
 # Initialisation des extensions
 db = SQLAlchemy()
@@ -43,14 +46,28 @@ def create_app():
     with app.app_context():
         try:
             # Importation des routes
-            from .routes import auth, characters, matches, tournaments, users
+            from .routes import (
+                auth,
+                characters,
+                matches,
+                tournaments,
+                users,
+                rankings
+            )
 
             # Enregistrement des blueprints
             app.register_blueprint(auth.bp, url_prefix="/api/auth")
             app.register_blueprint(users.bp, url_prefix="/api/users")
-            app.register_blueprint(tournaments.bp, url_prefix="/api/tournaments")
+            app.register_blueprint(
+                tournaments.bp,
+                url_prefix="/api/tournaments"
+            )
             app.register_blueprint(matches.bp, url_prefix="/api/matches")
-            app.register_blueprint(characters.bp, url_prefix="/api/characters")
+            app.register_blueprint(
+                characters.bp,
+                url_prefix="/api/characters"
+            )
+            app.register_blueprint(rankings.bp, url_prefix="/api/rankings")
 
             app.logger.info("All blueprints registered successfully")
         except ImportError as e:

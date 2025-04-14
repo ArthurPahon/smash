@@ -5,105 +5,120 @@ class Match(db.Model):
     __tablename__ = "match"
 
     id = db.Column(db.Integer, primary_key=True)
-    phase_id = db.Column(db.Integer, db.ForeignKey("phase.id"), nullable=False)
-    tournoi_id = db.Column(db.Integer, db.ForeignKey("tournoi.id"),
-                           nullable=False)
+    tournament_id = db.Column(
+        db.Integer, db.ForeignKey("tournament.id"), nullable=False
+    )
+    bracket_id = db.Column(
+        db.Integer, db.ForeignKey("bracket.id"), nullable=False
+    )
+    phase_id = db.Column(db.Integer, db.ForeignKey("phase.id"))
     round = db.Column(db.Integer, nullable=False)
-    heure_prevue = db.Column(db.DateTime)
-    statut = db.Column(db.String(20), default="à venir")  # à venir, en cours, terminé
+    match_number = db.Column(db.Integer, nullable=False)
+    player1_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    player2_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    winner_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    loser_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    score = db.Column(db.String(50))  # Format: "3-2"
+    status = db.Column(
+        db.String(20), default="pending"
+    )  # pending, in_progress, completed
+    scheduled_time = db.Column(db.DateTime)
+    character1_id = db.Column(db.Integer, db.ForeignKey("character.id"))
+    character2_id = db.Column(db.Integer, db.ForeignKey("character.id"))
 
-    # Relations
-    participants = db.relationship("MatchParticipant", backref="match", lazy="dynamic")
+    # Relationships
+    tournament = db.relationship('Tournament', back_populates='matches')
+    bracket = db.relationship('Bracket', back_populates='matches')
+    phase = db.relationship('Phase', back_populates='matches')
+    player1 = db.relationship('User', foreign_keys=[player1_id])
+    player2 = db.relationship('User', foreign_keys=[player2_id])
+    winner = db.relationship('User', foreign_keys=[winner_id])
+    loser = db.relationship('User', foreign_keys=[loser_id])
+    character1 = db.relationship('Character', foreign_keys=[character1_id])
+    character2 = db.relationship('Character', foreign_keys=[character2_id])
 
     def __init__(
-        self, phase_id, tournoi_id, round, heure_prevue=None, statut="à venir"
+        self,
+        tournament_id,
+        bracket_id,
+        round,
+        match_number,
+        phase_id=None,
+        player1_id=None,
+        player2_id=None,
+        winner_id=None,
+        loser_id=None,
+        score=None,
+        status="pending",
+        scheduled_time=None,
+        character1_id=None,
+        character2_id=None
     ):
+        self.tournament_id = tournament_id
+        self.bracket_id = bracket_id
         self.phase_id = phase_id
-        self.tournoi_id = tournoi_id
         self.round = round
-        self.heure_prevue = heure_prevue
-        self.statut = statut
+        self.match_number = match_number
+        self.player1_id = player1_id
+        self.player2_id = player2_id
+        self.winner_id = winner_id
+        self.loser_id = loser_id
+        self.score = score
+        self.status = status
+        self.scheduled_time = scheduled_time
+        self.character1_id = character1_id
+        self.character2_id = character2_id
 
     def to_dict(self):
-        """Convertir le match en dictionnaire"""
+        """Convert match to dictionary"""
         return {
             "id": self.id,
+            "tournament_id": self.tournament_id,
+            "bracket_id": self.bracket_id,
             "phase_id": self.phase_id,
-            "tournoi_id": self.tournoi_id,
             "round": self.round,
-            "heure_prevue": (
-                self.heure_prevue.isoformat() if self.heure_prevue else None
+            "match_number": self.match_number,
+            "player1_id": self.player1_id,
+            "player2_id": self.player2_id,
+            "winner_id": self.winner_id,
+            "loser_id": self.loser_id,
+            "score": self.score,
+            "status": self.status,
+            "scheduled_time": (
+                self.scheduled_time.isoformat() if self.scheduled_time else None
             ),
-            "statut": self.statut,
-            "participants": [p.to_dict() for p in self.participants],
+            "character1_id": self.character1_id,
+            "character2_id": self.character2_id
         }
 
-    def add_participant(self, utilisateur_id, personnage_id=None, score=0):
-        """Ajouter un participant au match"""
-        participant = MatchParticipant(
-            match_id=self.id,
-            utilisateur_id=utilisateur_id,
-            personnage_id=personnage_id,
-            score=score,
-        )
-        db.session.add(participant)
-        db.session.commit()
-        return participant
 
-    def update_score(self, utilisateur_id, score):
-        """Mettre à jour le score d'un participant"""
-        participant = self.participants.filter_by(utilisateur_id=utilisateur_id).first()
-        if participant:
-            participant.score = score
-            db.session.commit()
-            return True
-        return False
-
-    def declare_winner(self, utilisateur_id):
-        """Déclarer un vainqueur pour le match"""
-        # Réinitialiser tous les vainqueurs
-        for p in self.participants:
-            p.vainqueur = False
-
-        # Définir le nouveau vainqueur
-        participant = self.participants.filter_by(utilisateur_id=utilisateur_id).first()
-        if participant:
-            participant.vainqueur = True
-            self.statut = "terminé"
-            db.session.commit()
-            return True
-        return False
-
-
-class MatchParticipant(db.Model):
-    __tablename__ = "participant_match"
+class Bracket(db.Model):
+    __tablename__ = "bracket"
 
     id = db.Column(db.Integer, primary_key=True)
-    match_id = db.Column(db.Integer, db.ForeignKey("match.id"), nullable=False)
-    utilisateur_id = db.Column(
-        db.Integer, db.ForeignKey("utilisateur.id"), nullable=False
+    tournament_id = db.Column(
+        db.Integer, db.ForeignKey("tournament.id"), nullable=False
     )
-    personnage_id = db.Column(db.Integer, db.ForeignKey("personnage.id"))
-    score = db.Column(db.Integer, default=0)
-    vainqueur = db.Column(db.Boolean, default=False)
+    name = db.Column(db.String(100), nullable=False)
+    order = db.Column(db.Integer, nullable=False)
+    format = db.Column(db.String(50))  # round-robin, single elim, double elim
 
-    def __init__(
-        self, match_id, utilisateur_id, personnage_id=None, score=0,
-        vainqueur=False
-    ):
-        self.match_id = match_id
-        self.utilisateur_id = utilisateur_id
-        self.personnage_id = personnage_id
-        self.score = score
-        self.vainqueur = vainqueur
+    # Relationships
+    tournament = db.relationship('Tournament', back_populates='bracket')
+    matches = db.relationship('Match', back_populates='bracket')
+
+    def __init__(self, tournament_id, name, order, format=None):
+        self.tournament_id = tournament_id
+        self.name = name
+        self.order = order
+        self.format = format
 
     def to_dict(self):
-        """Convertir le participant en dictionnaire"""
+        """Convert bracket to dictionary"""
         return {
             "id": self.id,
-            "match_id": self.match_id,
-            "utilisateur_id": self.utilisateur_id,
-            "personnage_id": self.personnage_id,
-            "score": self.score,
-            "vainqueur": self.vainqueur,
+            "tournament_id": self.tournament_id,
+            "name": self.name,
+            "order": self.order,
+            "format": self.format
         }
