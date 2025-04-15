@@ -1,231 +1,213 @@
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
-from app.models import Tournament, User, Registration, Bracket, Match
+from app.models.tournament import Tournament
+from app.models.registration import Registration
 
-# Création du Blueprint pour les routes des tournois
 bp = Blueprint("tournaments", __name__)
 
-
-# Route pour obtenir tous les tournois
 @bp.route("", methods=["GET"])
-@jwt_required()
 def get_tournaments():
-    # Pagination
+    current_app.logger.info("=== DÉBUT DE LA ROUTE GET /tournaments ===")
+    current_app.logger.info(f"Headers de la requête: {dict(request.headers)}")
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-
-    # Filtres
     search = request.args.get('search', '')
-    statut = request.args.get('statut', '')
+    status = request.args.get('status', '')
+
+    current_app.logger.info(f"Paramètres de la requête - page: {page}, per_page: {per_page}, search: {search}, status: {status}")
 
     query = Tournament.query
     if search:
-        query = query.filter(Tournament.nom.ilike(f'%{search}%'))
-    if statut:
-        query = query.filter(Tournament.statut == statut)
+        query = query.filter(Tournament.name.ilike(f'%{search}%'))
+    if status and status != 'all':
+        query = query.filter(Tournament.status == status)
 
-    pagination = query.paginate(page=page, per_page=per_page)
-    tournaments = pagination.items
+    try:
+        current_app.logger.info("Exécution de la requête de pagination")
+        pagination = query.paginate(page=page, per_page=per_page)
+        tournaments = pagination.items
+        current_app.logger.info(f"Nombre de tournois trouvés: {len(tournaments)}")
 
-    return jsonify({
-        'tournaments': [{
-            'id': t.id,
-            'nom': t.nom,
-            'date_debut': t.date_debut.isoformat(),
-            'date_fin': t.date_fin.isoformat(),
-            'adresse': t.adresse,
-            'description': t.description,
-            'statut': t.statut
-        } for t in tournaments],
-        'total': pagination.total,
-        'pages': pagination.pages,
-        'current_page': page
-    }), 200
+        result = {
+            'tournaments': [t.to_dict() for t in tournaments],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page
+        }
+        current_app.logger.info("Réponse préparée avec succès")
+        current_app.logger.info("=== FIN DE LA ROUTE GET /tournaments ===")
+        return jsonify(result), 200
+    except Exception as e:
+        current_app.logger.error(f"Erreur lors de la récupération des tournois: {str(e)}")
+        current_app.logger.error(f"Type d'erreur: {type(e)}")
+        current_app.logger.error("Traceback complet:", exc_info=True)
+        current_app.logger.error("=== FIN DE LA ROUTE GET /tournaments (AVEC ERREUR) ===")
+        return jsonify({'error': str(e)}), 422
 
-
-# Route pour obtenir un tournoi spécifique
 @bp.route("/<int:tournament_id>", methods=["GET"])
 @jwt_required()
 def get_tournament(tournament_id):
     tournament = Tournament.query.get_or_404(tournament_id)
+    return jsonify(tournament.to_dict()), 200
 
-    return jsonify({
-        'id': tournament.id,
-        'nom': tournament.nom,
-        'date_debut': tournament.date_debut.isoformat(),
-        'date_fin': tournament.date_fin.isoformat(),
-        'adresse': tournament.adresse,
-        'description': tournament.description,
-        'statut': tournament.statut
-    }), 200
-
-
-# Route pour créer un nouveau tournoi
 @bp.route("", methods=["POST"])
 @jwt_required()
 def create_tournament():
     data = request.get_json()
+    current_user_id = get_jwt_identity()
 
-    # Vérification des champs requis
-    required_fields = ['nom', 'date_debut', 'date_fin']
+    required_fields = ['name', 'start_date', 'end_date']
     for field in required_fields:
         if field not in data:
-            return jsonify({'error': f'Le champ {field} est requis'}), 400
+            return jsonify({'error': f'Field {field} is required'}), 400
 
-    # Création du tournoi
-    tournament = Tournament(
-        nom=data['nom'],
-        date_debut=datetime.fromisoformat(data['date_debut']),
-        date_fin=datetime.fromisoformat(data['date_fin']),
-        adresse=data.get('adresse'),
-        description=data.get('description'),
-        statut='préparation'
-    )
+    try:
+        tournament = Tournament(
+            name=data['name'],
+            start_date=datetime.fromisoformat(data['start_date']),
+            end_date=datetime.fromisoformat(data['end_date']),
+            organizer_id=current_user_id,
+            description=data.get('description'),
+            registration_deadline=datetime.fromisoformat(
+                data['registration_deadline']
+            ) if 'registration_deadline' in data else None,
+            max_participants=data.get('max_participants'),
+            format=data.get('format'),
+            rules=data.get('rules'),
+            prize_pool=data.get('prize_pool')
+        )
 
-    db.session.add(tournament)
-    db.session.commit()
+        db.session.add(tournament)
+        db.session.commit()
 
-    return jsonify({
-        'id': tournament.id,
-        'nom': tournament.nom,
-        'date_debut': tournament.date_debut.isoformat(),
-        'date_fin': tournament.date_fin.isoformat(),
-        'adresse': tournament.adresse,
-        'description': tournament.description,
-        'statut': tournament.statut
-    }), 201
+        return jsonify(tournament.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating tournament: {str(e)}")
+        return jsonify({'error': str(e)}), 422
 
-
-# Route pour s'inscrire à un tournoi
-@bp.route("/<int:tournament_id>/register", methods=["POST"])
-@jwt_required()
-def register_to_tournament(tournament_id):
-    # Pour l'instant, on renvoie juste un message de succès
-    return jsonify(
-        {"message": f"Inscription au tournoi {tournament_id} réussie"}
-    ), 200
-
-
-@bp.route('/<int:tournament_id>', methods=['PUT'])
+@bp.route("/<int:tournament_id>", methods=["PUT"])
 @jwt_required()
 def update_tournament(tournament_id):
     current_user_id = get_jwt_identity()
     tournament = Tournament.query.get_or_404(tournament_id)
 
-    # Vérification des permissions (TODO: implémenter la vérification des rôles)
-    # Pour l'instant, on permet à n'importe qui de modifier
+    if tournament.organizer_id != current_user_id:
+        return jsonify({'error': 'Not authorized'}), 403
+
     data = request.get_json()
+    try:
+        if 'name' in data:
+            tournament.name = data['name']
+        if 'description' in data:
+            tournament.description = data['description']
+        if 'start_date' in data:
+            tournament.start_date = datetime.fromisoformat(data['start_date'])
+        if 'end_date' in data:
+            tournament.end_date = datetime.fromisoformat(data['end_date'])
+        if 'registration_deadline' in data:
+            tournament.registration_deadline = datetime.fromisoformat(
+                data['registration_deadline']
+            )
+        if 'max_participants' in data:
+            tournament.max_participants = data['max_participants']
+        if 'format' in data:
+            tournament.format = data['format']
+        if 'rules' in data:
+            tournament.rules = data['rules']
+        if 'prize_pool' in data:
+            tournament.prize_pool = data['prize_pool']
+        if 'status' in data:
+            if data['status'] not in [
+                'preparation', 'ongoing', 'finished', 'cancelled'
+            ]:
+                return jsonify({'error': 'Invalid status'}), 400
+            tournament.status = data['status']
 
-    # Mise à jour des champs
-    if 'nom' in data:
-        tournament.nom = data['nom']
-    if 'date_debut' in data:
-        tournament.date_debut = datetime.fromisoformat(data['date_debut'])
-    if 'date_fin' in data:
-        tournament.date_fin = datetime.fromisoformat(data['date_fin'])
-    if 'adresse' in data:
-        tournament.adresse = data['adresse']
-    if 'description' in data:
-        tournament.description = data['description']
+        db.session.commit()
+        return jsonify(tournament.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating tournament: {str(e)}")
+        return jsonify({'error': str(e)}), 422
 
-    db.session.commit()
-
-    return jsonify({
-        'id': tournament.id,
-        'nom': tournament.nom,
-        'date_debut': tournament.date_debut.isoformat(),
-        'date_fin': tournament.date_fin.isoformat(),
-        'adresse': tournament.adresse,
-        'description': tournament.description,
-        'statut': tournament.statut
-    }), 200
-
-
-@bp.route('/<int:tournament_id>', methods=['DELETE'])
+@bp.route("/<int:tournament_id>", methods=["DELETE"])
 @jwt_required()
 def delete_tournament(tournament_id):
     current_user_id = get_jwt_identity()
     tournament = Tournament.query.get_or_404(tournament_id)
 
-    # Vérification des permissions (TODO: implémenter la vérification des rôles)
-    # Pour l'instant, on permet à n'importe qui de supprimer
+    if tournament.organizer_id != current_user_id:
+        return jsonify({'error': 'Not authorized'}), 403
 
-    db.session.delete(tournament)
-    db.session.commit()
+    try:
+        db.session.delete(tournament)
+        db.session.commit()
+        return jsonify({'message': 'Tournament deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting tournament: {str(e)}")
+        return jsonify({'error': str(e)}), 422
 
-    return jsonify({'message': 'Tournoi supprimé avec succès'}), 200
-
-
-@bp.route('/<int:tournament_id>/status', methods=['PUT'])
+@bp.route("/<int:tournament_id>/register", methods=["POST"])
 @jwt_required()
-def update_tournament_status(tournament_id):
+def register_to_tournament(tournament_id):
     current_user_id = get_jwt_identity()
     tournament = Tournament.query.get_or_404(tournament_id)
 
-    # Vérification des permissions (TODO: implémenter la vérification des rôles)
-    data = request.get_json()
-
-    if 'statut' not in data:
-        return jsonify({'error': 'Le champ statut est requis'}), 400
-
-    if data['statut'] not in ['préparation', 'en cours', 'terminé']:
-        return jsonify({'error': 'Statut invalide'}), 400
-
-    tournament.statut = data['statut']
-    db.session.commit()
-
-    return jsonify({
-        'id': tournament.id,
-        'statut': tournament.statut
-    }), 200
-
-
-@bp.route('/<int:tournament_id>/bracket', methods=['GET'])
-@jwt_required()
-def get_tournament_bracket(tournament_id):
-    tournament = Tournament.query.get_or_404(tournament_id)
-    bracket = Bracket.query.filter_by(tournament_id=tournament_id).first()
-
-    if not bracket:
-        return jsonify({'error': 'Aucun bracket trouvé pour ce tournoi'}), 404
-
-    # Récupération des matchs du bracket
-    matches = Match.query.filter_by(
+    # Vérifier si l'utilisateur est déjà inscrit
+    existing_registration = Registration.query.filter_by(
+        user_id=current_user_id,
         tournament_id=tournament_id
-    ).order_by(Match.round, Match.position).all()
+    ).first()
 
-    return jsonify({
-        'bracket': {
-            'id': bracket.id,
-            'type': bracket.type,
-            'format_match': bracket.format_match,
-            'nb_joueurs': bracket.nb_joueurs,
-            'statut_generation': bracket.statut_generation
-        },
-        'matches': [{
-            'id': m.id,
-            'bracket_type': m.bracket_type,
-            'round': m.round,
-            'position': m.position,
-            'joueur1': {
-                'id': m.joueur1.id,
-                'nom': m.joueur1.nom
-            } if m.joueur1 else None,
-            'joueur2': {
-                'id': m.joueur2.id,
-                'nom': m.joueur2.nom
-            } if m.joueur2 else None,
-            'score_joueur1': m.score_joueur1,
-            'score_joueur2': m.score_joueur2,
-            'winner': {
-                'id': m.winner.id,
-                'nom': m.winner.nom
-            } if m.winner else None,
-            'loser': {
-                'id': m.loser.id,
-                'nom': m.loser.nom
-            } if m.loser else None
-        } for m in matches]
-    }), 200
+    if existing_registration:
+        return jsonify({'error': 'Already registered'}), 400
+
+    # Vérifier si le tournoi est complet
+    if (tournament.max_participants and
+            len(tournament.registrations) >= tournament.max_participants):
+        return jsonify({'error': 'Tournament is full'}), 400
+
+    # Vérifier si la date limite d'inscription est dépassée
+    if (tournament.registration_deadline and
+            datetime.utcnow() > tournament.registration_deadline):
+        return jsonify({'error': 'Registration deadline has passed'}), 400
+
+    try:
+        registration = Registration(
+            user_id=current_user_id,
+            tournament_id=tournament_id
+        )
+        db.session.add(registration)
+        db.session.commit()
+        return jsonify({'message': 'Successfully registered'}), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Error registering to tournament: {str(e)}"
+        )
+        return jsonify({'error': str(e)}), 422
+
+@bp.route("/<int:tournament_id>/unregister", methods=["POST"])
+@jwt_required()
+def unregister_from_tournament(tournament_id):
+    current_user_id = get_jwt_identity()
+    registration = Registration.query.filter_by(
+        user_id=current_user_id,
+        tournament_id=tournament_id
+    ).first_or_404()
+
+    try:
+        db.session.delete(registration)
+        db.session.commit()
+        return jsonify({'message': 'Successfully unregistered'}), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Error unregistering from tournament: {str(e)}"
+        )
+        return jsonify({'error': str(e)}), 422

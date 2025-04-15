@@ -1,17 +1,16 @@
 #!/bin/bash
 
-echo "Initialisation de la base de données..."
+# Création de l'environnement virtuel
+python3 -m venv venv
+source venv/bin/activate
 
-# Attendre que la base de données soit prête
-echo "Attente de la base de données..."
-sleep 10
+# Installation des dépendances
+pip install -r requirements.txt
 
-# Initialiser les migrations
-echo "Initialisation des migrations..."
+# Initialisation des migrations
 python scripts/init_migrations.py
 
-# Initialiser la base de données avec les données de test
-echo "Initialisation des données de test..."
+# Initialisation de la base de données
 python scripts/init_db.py
 
-echo "Configuration de la base de données terminée!"
+echo "Base de données configurée avec succès!"

@@ -1,124 +1,98 @@
+from datetime import datetime
 from app import db
 
-
 class Match(db.Model):
-    __tablename__ = "match"
+    __tablename__ = 'matches'
 
     id = db.Column(db.Integer, primary_key=True)
-    tournament_id = db.Column(
-        db.Integer, db.ForeignKey("tournament.id"), nullable=False
-    )
-    bracket_id = db.Column(
-        db.Integer, db.ForeignKey("bracket.id"), nullable=False
-    )
-    phase_id = db.Column(db.Integer, db.ForeignKey("phase.id"))
-    round = db.Column(db.Integer, nullable=False)
-    match_number = db.Column(db.Integer, nullable=False)
-    player1_id = db.Column(db.Integer, db.ForeignKey("user.id"))
-    player2_id = db.Column(db.Integer, db.ForeignKey("user.id"))
-    winner_id = db.Column(db.Integer, db.ForeignKey("user.id"))
-    loser_id = db.Column(db.Integer, db.ForeignKey("user.id"))
-    score = db.Column(db.String(50))  # Format: "3-2"
-    status = db.Column(
-        db.String(20), default="pending"
-    )  # pending, in_progress, completed
-    scheduled_time = db.Column(db.DateTime)
-    character1_id = db.Column(db.Integer, db.ForeignKey("character.id"))
-    character2_id = db.Column(db.Integer, db.ForeignKey("character.id"))
+    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
+    player1_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    player2_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    winner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    loser_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    score = db.Column(db.String(50))  # Format: "2-1" ou similaire
+    round = db.Column(db.Integer)  # Numéro du round dans le bracket
+    bracket_position = db.Column(db.Integer)  # Position dans le bracket
+    status = db.Column(db.String(20), default='pending')  # pending, ongoing, completed
+    start_time = db.Column(db.DateTime)
+    end_time = db.Column(db.DateTime)
 
-    # Relationships
+    # Relations
     tournament = db.relationship('Tournament', back_populates='matches')
-    bracket = db.relationship('Bracket', back_populates='matches')
-    phase = db.relationship('Phase', back_populates='matches')
-    player1 = db.relationship('User', foreign_keys=[player1_id])
-    player2 = db.relationship('User', foreign_keys=[player2_id])
-    winner = db.relationship('User', foreign_keys=[winner_id])
-    loser = db.relationship('User', foreign_keys=[loser_id])
-    character1 = db.relationship('Character', foreign_keys=[character1_id])
-    character2 = db.relationship('Character', foreign_keys=[character2_id])
+    player1 = db.relationship('User', foreign_keys=[player1_id], back_populates='matches_as_player1')
+    player2 = db.relationship('User', foreign_keys=[player2_id], back_populates='matches_as_player2')
+    winner = db.relationship('User', foreign_keys=[winner_id], back_populates='matches_won')
+    loser = db.relationship('User', foreign_keys=[loser_id], back_populates='matches_lost')
+    characters = db.relationship(
+        'Character',
+        secondary='match_characters',
+        back_populates='matches',
+        lazy='dynamic'
+    )
 
-    def __init__(
-        self,
-        tournament_id,
-        bracket_id,
-        round,
-        match_number,
-        phase_id=None,
-        player1_id=None,
-        player2_id=None,
-        winner_id=None,
-        loser_id=None,
-        score=None,
-        status="pending",
-        scheduled_time=None,
-        character1_id=None,
-        character2_id=None
-    ):
+    def __init__(self, tournament_id, player1_id, player2_id, round, bracket_position, **kwargs):
         self.tournament_id = tournament_id
-        self.bracket_id = bracket_id
-        self.phase_id = phase_id
-        self.round = round
-        self.match_number = match_number
         self.player1_id = player1_id
         self.player2_id = player2_id
-        self.winner_id = winner_id
-        self.loser_id = loser_id
-        self.score = score
-        self.status = status
-        self.scheduled_time = scheduled_time
-        self.character1_id = character1_id
-        self.character2_id = character2_id
+        self.round = round
+        self.bracket_position = bracket_position
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def to_dict(self):
-        """Convert match to dictionary"""
         return {
-            "id": self.id,
-            "tournament_id": self.tournament_id,
-            "bracket_id": self.bracket_id,
-            "phase_id": self.phase_id,
-            "round": self.round,
-            "match_number": self.match_number,
-            "player1_id": self.player1_id,
-            "player2_id": self.player2_id,
-            "winner_id": self.winner_id,
-            "loser_id": self.loser_id,
-            "score": self.score,
-            "status": self.status,
-            "scheduled_time": (
-                self.scheduled_time.isoformat() if self.scheduled_time else None
-            ),
-            "character1_id": self.character1_id,
-            "character2_id": self.character2_id
+            'id': self.id,
+            'tournament_id': self.tournament_id,
+            'player1': {
+                'id': self.player1.id,
+                'name': self.player1.name
+            } if self.player1 else None,
+            'player2': {
+                'id': self.player2.id,
+                'name': self.player2.name
+            } if self.player2 else None,
+            'winner': {
+                'id': self.winner.id,
+                'name': self.winner.name
+            } if self.winner else None,
+            'loser': {
+                'id': self.loser.id,
+                'name': self.loser.name
+            } if self.loser else None,
+            'score': self.score,
+            'round': self.round,
+            'bracket_position': self.bracket_position,
+            'status': self.status,
+            'start_time': self.start_time.isoformat() if self.start_time else None,
+            'end_time': self.end_time.isoformat() if self.end_time else None
         }
 
-
 class Bracket(db.Model):
-    __tablename__ = "bracket"
+    __tablename__ = 'brackets'
 
     id = db.Column(db.Integer, primary_key=True)
-    tournament_id = db.Column(
-        db.Integer, db.ForeignKey("tournament.id"), nullable=False
-    )
-    name = db.Column(db.String(100), nullable=False)
-    order = db.Column(db.Integer, nullable=False)
-    format = db.Column(db.String(50))  # round-robin, single elim, double elim
+    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
+    type = db.Column(db.String(50))  # winners, losers (pour double elimination)
+    round_count = db.Column(db.Integer)
+    current_round = db.Column(db.Integer, default=1)
+    status = db.Column(db.String(20), default='preparation')  # preparation, ongoing, completed
 
-    # Relationships
-    tournament = db.relationship('Tournament', back_populates='bracket')
-    matches = db.relationship('Match', back_populates='bracket')
+    # Relations
+    tournament = db.relationship('Tournament', back_populates='brackets')
 
-    def __init__(self, tournament_id, name, order, format=None):
+    def __init__(self, tournament_id, type, round_count, **kwargs):
         self.tournament_id = tournament_id
-        self.name = name
-        self.order = order
-        self.format = format
+        self.type = type
+        self.round_count = round_count
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def to_dict(self):
-        """Convert bracket to dictionary"""
         return {
-            "id": self.id,
-            "tournament_id": self.tournament_id,
-            "name": self.name,
-            "order": self.order,
-            "format": self.format
+            'id': self.id,
+            'tournament_id': self.tournament_id,
+            'type': self.type,
+            'round_count': self.round_count,
+            'current_round': self.current_round,
+            'status': self.status
         }

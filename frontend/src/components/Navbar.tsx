@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../contexts/AuthContext';
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // À remplacer par un contexte d'authentification
+  const { isLoggedIn, user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <nav className="bg-smash-red">
@@ -44,8 +51,8 @@ const Navbar: React.FC = () => {
                     Profil
                   </Link>
                   <button
-                    className="text-white hover:bg-smash-red-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
-                    onClick={() => setIsLoggedIn(false)}
+                    className="ml-2 text-white hover:bg-smash-red-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+                    onClick={handleLogout}
                   >
                     Déconnexion
                   </button>
@@ -109,8 +116,8 @@ const Navbar: React.FC = () => {
                   Profil
                 </Link>
                 <button
-                  className="text-white hover:bg-smash-red-800 hover:text-white w-full text-left px-3 py-2 rounded-md text-base font-medium"
-                  onClick={() => setIsLoggedIn(false)}
+                  className="text-white hover:bg-smash-red-800 hover:text-white block w-full text-left px-3 py-2 rounded-md text-base font-medium"
+                  onClick={handleLogout}
                 >
                   Déconnexion
                 </button>

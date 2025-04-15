@@ -1,12 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token,
     get_jwt_identity,
-    jwt_required,
-    JWTManager
+    jwt_required
 )
-from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from app.models import User
 
@@ -20,7 +18,7 @@ def register():
     data = request.get_json()
 
     # Vérification des champs requis
-    required_fields = ['nom', 'email', 'mot_de_passe']
+    required_fields = ['name', 'email', 'password']
     for field in required_fields:
         if field not in data:
             return jsonify({'error': f'Le champ {field} est requis'}), 400
@@ -31,18 +29,25 @@ def register():
 
     # Création du nouvel utilisateur
     user = User(
-        nom=data['nom'],
+        name=data['name'],
         email=data['email'],
-        mot_de_passe=generate_password_hash(data['mot_de_passe']),
-        photo_profil=data.get('photo_profil'),
-        pays=data.get('pays'),
-        province=data.get('province')
+        password=data['password'],
+        profile_picture=data.get('profile_picture')
     )
+
+    # Ajout du pays et de l'état si fournis
+    if 'country' in data:
+        user.country = data['country']
+    if 'state' in data:
+        user.state = data['state']
 
     db.session.add(user)
     db.session.commit()
 
-    return jsonify({'message': 'Utilisateur créé avec succès', 'user_id': user.id}), 201
+    return jsonify({
+        'message': 'Utilisateur créé avec succès',
+        'user_id': user.id
+    }), 201
 
 
 # Route pour la connexion d'un utilisateur
@@ -50,12 +55,12 @@ def register():
 def login():
     data = request.get_json()
 
-    if not data or 'email' not in data or 'mot_de_passe' not in data:
+    if not data or 'email' not in data or 'password' not in data:
         return jsonify({'error': 'Email et mot de passe requis'}), 400
 
     user = User.query.filter_by(email=data['email']).first()
 
-    if not user or not check_password_hash(user.mot_de_passe, data['mot_de_passe']):
+    if not user or not user.check_password(data['password']):
         return jsonify({'error': 'Email ou mot de passe incorrect'}), 401
 
     # Création du token JWT
@@ -66,15 +71,11 @@ def login():
 
     return jsonify({
         'access_token': access_token,
-        'user': {
-            'id': user.id,
-            'nom': user.nom,
-            'email': user.email
-        }
+        'user': user.to_dict()
     }), 200
 
 
-# Route pour vérifier si l'utilisateur est connecté
+# Route pour la déconnexion
 @bp.route("/logout", methods=["POST"])
 @jwt_required()
 def logout():
@@ -91,15 +92,7 @@ def get_current_user():
     if not user:
         return jsonify({'error': 'Utilisateur non trouvé'}), 404
 
-    return jsonify({
-        'id': user.id,
-        'nom': user.nom,
-        'email': user.email,
-        'photo_profil': user.photo_profil,
-        'pays': user.pays,
-        'province': user.province,
-        'date_inscription': user.date_inscription.isoformat()
-    }), 200
+    return jsonify(user.to_dict()), 200
 
 
 @bp.route("/password", methods=["PUT"])
@@ -108,15 +101,15 @@ def change_password():
     user_id = get_jwt_identity()
     data = request.get_json()
 
-    if not data or 'ancien_mot_de_passe' not in data or 'nouveau_mot_de_passe' not in data:
+    if not data or 'old_password' not in data or 'new_password' not in data:
         return jsonify({'error': 'Ancien et nouveau mot de passe requis'}), 400
 
     user = User.query.get(user_id)
 
-    if not check_password_hash(user.mot_de_passe, data['ancien_mot_de_passe']):
+    if not user.check_password(data['old_password']):
         return jsonify({'error': 'Ancien mot de passe incorrect'}), 401
 
-    user.mot_de_passe = generate_password_hash(data['nouveau_mot_de_passe'])
+    user.set_password(data['new_password'])
     db.session.commit()
 
     return jsonify({'message': 'Mot de passe modifié avec succès'}), 200
@@ -133,18 +126,20 @@ def request_password_reset():
 
     if not user:
         # Pour des raisons de sécurité, on renvoie toujours un succès
-        return jsonify({'message': 'Si votre email existe, vous recevrez un lien de réinitialisation'}), 200
+        msg = 'Si votre email existe, vous recevrez un lien de réinitialisation'
+        return jsonify({'message': msg}), 200
 
     # TODO: Implémenter l'envoi d'email avec le token de réinitialisation
     # Pour l'instant, on renvoie juste un message de succès
-    return jsonify({'message': 'Si votre email existe, vous recevrez un lien de réinitialisation'}), 200
+    msg = 'Si votre email existe, vous recevrez un lien de réinitialisation'
+    return jsonify({'message': msg}), 200
 
 
 @bp.route("/password/reset/<token>", methods=["PUT"])
 def reset_password(token):
     data = request.get_json()
 
-    if not data or 'nouveau_mot_de_passe' not in data:
+    if not data or 'new_password' not in data:
         return jsonify({'error': 'Nouveau mot de passe requis'}), 400
 
     # TODO: Vérifier le token et réinitialiser le mot de passe

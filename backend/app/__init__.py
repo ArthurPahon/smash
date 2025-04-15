@@ -24,6 +24,11 @@ def create_app():
     app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY",
                                                   "jwt_dev_key")
 
+    # Configuration des logs
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    app.logger.setLevel(logging.INFO)
+
     # Mode de développement sans base de données
     if os.environ.get("FLASK_ENV") == "development_no_db":
         app.logger.info("Running in development mode without database")
@@ -40,7 +45,13 @@ def create_app():
 
     # Initialisation de JWT et CORS
     jwt.init_app(app)
-    CORS(app)
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:3000"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    })
 
     # Enregistrement des blueprints
     with app.app_context():

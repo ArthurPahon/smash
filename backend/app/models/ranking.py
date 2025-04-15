@@ -2,13 +2,13 @@ from app import db
 
 
 class Ranking(db.Model):
-    __tablename__ = "ranking"
+    __tablename__ = "rankings"
 
     id = db.Column(db.Integer, primary_key=True)
     tournament_id = db.Column(
-        db.Integer, db.ForeignKey("tournament.id"), nullable=False
+        db.Integer, db.ForeignKey("tournaments.id"), nullable=False
     )
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     rank = db.Column(db.Integer, nullable=False)
     points = db.Column(db.Integer, default=0)
     matches_played = db.Column(db.Integer, default=0)
@@ -43,14 +43,6 @@ class Ranking(db.Model):
             "matches_won": self.matches_won,
             "matches_lost": self.matches_lost
         }
-
-
-class Classement(Ranking):
-    """Classe pour gérer les classements des tournois"""
-    __tablename__ = "classement"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def calculate_points(self, match_result):
         """Calcule les points en fonction du résultat du match"""

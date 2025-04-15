@@ -3,20 +3,25 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask_migrate import init, migrate, upgrade
-from app import create_app
+from flask_migrate import Migrate
+from app import create_app, db
+from app.models import User, Tournament, Match, Registration, Ranking, Character
 
 
 def init_migrations():
     app = create_app()
     with app.app_context():
-        # Initialiser les migrations
+        # Initialisation de Flask-Migrate
+        migrate = Migrate(app, db)
+
+        # Création du dossier migrations s'il n'existe pas
+        if not os.path.exists('migrations'):
+            os.makedirs('migrations')
+
+        # Initialisation des migrations
+        from flask_migrate import init, migrate, upgrade
         init()
-
-        # Créer la migration initiale
         migrate()
-
-        # Appliquer les migrations
         upgrade()
 
         print("Migrations initialisées avec succès!")

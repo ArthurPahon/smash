@@ -3,7 +3,6 @@
 from . import (
     auth,
     characters,
-    matches,
     rankings,
     registrations,
     tournaments,
@@ -13,7 +12,6 @@ from . import (
 __all__ = [
     'auth',
     'characters',
-    'matches',
     'rankings',
     'registrations',
     'tournaments',

@@ -1,10 +1,9 @@
-from app import db
-
 from .user import User, Role
-from .tournament import Tournament, Registration
+from .tournament import Tournament
+from .registration import Registration
 from .match import Match, Bracket
 from .character import Character
-from .ranking import Ranking, Classement
+from .ranking import Ranking
 
 __all__ = [
     'User',
@@ -14,6 +13,5 @@ __all__ = [
     'Match',
     'Bracket',
     'Character',
-    'Ranking',
-    'Classement'
+    'Ranking'
 ]

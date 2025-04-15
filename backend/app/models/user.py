@@ -7,14 +7,44 @@ from app import db
 # Association table for user-role relationship
 user_role = db.Table(
     "user_role",
-    db.Column("user_id", db.Integer, db.ForeignKey("user.id"), primary_key=True),
-    db.Column("role_id", db.Integer, db.ForeignKey("role.id"), primary_key=True),
-    db.Column("tournament_id", db.Integer, db.ForeignKey("tournament.id")),
+    db.Column(
+        "user_id",
+        db.Integer,
+        db.ForeignKey("users.id"),
+        primary_key=True
+    ),
+    db.Column(
+        "role_id",
+        db.Integer,
+        db.ForeignKey("roles.id"),
+        primary_key=True
+    ),
+    db.Column(
+        "tournament_id",
+        db.Integer,
+        db.ForeignKey("tournaments.id")
+    ),
 )
 
+# Association table for user-tournament relationship
+user_tournaments = db.Table(
+    "user_tournaments",
+    db.Column(
+        "user_id",
+        db.Integer,
+        db.ForeignKey("users.id"),
+        primary_key=True
+    ),
+    db.Column(
+        "tournament_id",
+        db.Integer,
+        db.ForeignKey("tournaments.id"),
+        primary_key=True
+    )
+)
 
 class User(db.Model):
-    __tablename__ = "user"
+    __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -27,13 +57,38 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True)
 
     # Relationships
-    roles = db.relationship('Role', secondary=user_role, backref=db.backref('users', lazy='dynamic'))
+    roles = db.relationship(
+        'Role',
+        secondary=user_role,
+        backref=db.backref('users', lazy='dynamic')
+    )
     registrations = db.relationship('Registration', back_populates='user')
-    matches_as_player1 = db.relationship('Match', foreign_keys='Match.player1_id', back_populates='player1')
-    matches_as_player2 = db.relationship('Match', foreign_keys='Match.player2_id', back_populates='player2')
-    matches_won = db.relationship('Match', foreign_keys='Match.winner_id', back_populates='winner')
-    matches_lost = db.relationship('Match', foreign_keys='Match.loser_id', back_populates='loser')
+    matches_as_player1 = db.relationship(
+        'Match',
+        foreign_keys='Match.player1_id',
+        back_populates='player1'
+    )
+    matches_as_player2 = db.relationship(
+        'Match',
+        foreign_keys='Match.player2_id',
+        back_populates='player2'
+    )
+    matches_won = db.relationship(
+        'Match',
+        foreign_keys='Match.winner_id',
+        back_populates='winner'
+    )
+    matches_lost = db.relationship(
+        'Match',
+        foreign_keys='Match.loser_id',
+        back_populates='loser'
+    )
     rankings = db.relationship('Ranking', back_populates='user')
+    tournaments = db.relationship(
+        'Tournament',
+        secondary='user_tournaments',
+        backref=db.backref('users', lazy='dynamic')
+    )
 
     def __repr__(self):
         return f'<User {self.name}>'
@@ -47,13 +102,15 @@ class User(db.Model):
     def set_password(self, password):
         """Hash and store the password"""
         self.password = bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt()
+            password.encode("utf-8"),
+            bcrypt.gensalt()
         ).decode("utf-8")
 
     def check_password(self, password):
         """Verify the password"""
         return bcrypt.checkpw(
-            password.encode("utf-8"), self.password.encode("utf-8")
+            password.encode("utf-8"),
+            self.password.encode("utf-8")
         )
 
     def has_role(self, role_name, tournament_id=None):
@@ -82,7 +139,8 @@ class User(db.Model):
             "email": self.email,
             "profile_picture": self.profile_picture,
             "registration_date": (
-                self.registration_date.isoformat() if self.registration_date else None
+                self.registration_date.isoformat()
+                if self.registration_date else None
             ),
             "country": self.country,
             "state": self.state,
@@ -92,7 +150,7 @@ class User(db.Model):
 
 
 class Role(db.Model):
-    __tablename__ = "role"
+    __tablename__ = "roles"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
