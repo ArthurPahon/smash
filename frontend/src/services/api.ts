@@ -70,18 +70,21 @@ export const getTournaments = async (params: {
       tournaments: response.data.tournaments.map((t: any) => ({
         id: t.id,
         name: t.name,
+        description: t.description,
         start_date: t.start_date,
         end_date: t.end_date,
-        address: t.address,
-        description: t.description,
+        registration_deadline: t.registration_deadline,
+        max_participants: t.max_participants,
+        current_participants: t.current_participants,
         status: t.status,
         format: t.format,
-        max_participants: t.nb_places_max,
-        current_participants: t.nb_inscrits,
-        organizer: {
-          id: 1, // Valeur par défaut
-          name: 'Organisateur', // Valeur par défaut
-        },
+        game: t.game,
+        rules: t.rules,
+        prize_pool: t.prize_pool,
+        address: t.address,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+        organizer: t.organizer,
       })),
       total: response.data.total,
       pages: response.data.pages,
@@ -102,18 +105,22 @@ export const getTournament = async (id: number) => {
     return {
       id: t.id,
       name: t.name,
-      description: t.description || '',
+      description: t.description,
       start_date: t.start_date,
       end_date: t.end_date,
-      address: t.address || '',
+      registration_deadline: t.registration_deadline,
+      max_participants: t.max_participants,
+      current_participants: t.current_participants,
       status: t.status,
-      format: t.format || 'Simple',
-      max_participants: t.nb_places_max || 32,
-      current_participants: t.nb_inscrits || 0,
-      organizer: {
-        id: 1, // Valeur par défaut
-        name: 'Organisateur', // Valeur par défaut
-      },
+      format: t.format,
+      game: t.game,
+      rules: t.rules,
+      prize_pool: t.prize_pool,
+      address: t.address,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
+      organizer: t.organizer,
+      registrations: t.registrations || [],
     };
   } catch (error) {
     console.error('Erreur lors de la récupération du tournoi:', error);
@@ -215,6 +222,37 @@ export const updateMatchResult = async (
 ) => {
   const response = await api.patch(`/tournaments/${tournamentId}/matches/${matchId}`, data);
   return response.data;
+};
+
+// Rankings
+export const getGlobalRankings = async (params?: { page?: number; per_page?: number }) => {
+  try {
+    const response = await api.get('/rankings', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching global rankings:', error);
+    throw error;
+  }
+};
+
+export const getTournamentRankings = async (tournamentId: number) => {
+  try {
+    const response = await api.get(`/rankings/tournaments/${tournamentId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching tournament rankings:', error);
+    throw error;
+  }
+};
+
+export const getUserRankings = async (userId: number) => {
+  try {
+    const response = await api.get(`/rankings/users/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching user rankings:', error);
+    throw error;
+  }
 };
 
 export default api;

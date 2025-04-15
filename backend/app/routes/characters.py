@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
-from app.models.character import Character
 from flask_jwt_extended import jwt_required
+from app.models.character import Character
 
 # Création du Blueprint pour les routes des personnages
 bp = Blueprint("characters", __name__)

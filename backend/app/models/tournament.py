@@ -85,5 +85,13 @@ class Tournament(db.Model):
                 'name': self.organizer.name
             } if self.organizer else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'registrations': [{
+                'id': reg.id,
+                'user_id': reg.user_id,
+                'tournament_id': reg.tournament_id,
+                'registration_date': reg.registration_date.isoformat() if reg.registration_date else None,
+                'status': reg.status,
+                'seed': reg.seed
+            } for reg in self.registrations]
         }

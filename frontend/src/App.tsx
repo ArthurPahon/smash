@@ -9,6 +9,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
+import TournamentCreatePage from './pages/TournamentCreatePage';
+import RankingsPage from './pages/RankingsPage';
 import { authService } from './services/auth';
 
 // Composant de protection des routes
@@ -38,6 +40,14 @@ const App: React.FC = () => {
             }
           />
           <Route
+            path="/tournaments/create"
+            element={
+              <PrivateRoute>
+                <TournamentCreatePage />
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/tournaments/:id"
             element={
               <PrivateRoute>
@@ -50,6 +60,14 @@ const App: React.FC = () => {
             element={
               <PrivateRoute>
                 <ProfilePage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/rankings"
+            element={
+              <PrivateRoute>
+                <RankingsPage />
               </PrivateRoute>
             }
           />

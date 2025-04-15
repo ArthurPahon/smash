@@ -45,6 +45,23 @@ def create_app():
 
     # Initialisation de JWT et CORS
     jwt.init_app(app)
+
+    # Gestionnaires d'erreurs JWT
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        app.logger.error(f"Token expiré - Header: {jwt_header}, Payload: {jwt_payload}")
+        return {"error": "Le token a expiré"}, 401
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        app.logger.error(f"Token invalide - Erreur: {error}")
+        return {"error": "Token invalide"}, 401
+
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        app.logger.error(f"Token manquant - Erreur: {error}")
+        return {"error": "Token manquant"}, 401
+
     CORS(app, resources={
         r"/api/*": {
             "origins": ["http://localhost:3000"],

@@ -65,7 +65,7 @@ def login():
 
     # Création du token JWT
     access_token = create_access_token(
-        identity=user.id,
+        identity=str(user.id),
         expires_delta=timedelta(days=1)
     )
 
@@ -86,7 +86,7 @@ def logout():
 @bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_current_user():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
 
     if not user:
@@ -98,7 +98,7 @@ def get_current_user():
 @bp.route("/password", methods=["PUT"])
 @jwt_required()
 def change_password():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     data = request.get_json()
 
     if not data or 'old_password' not in data or 'new_password' not in data:

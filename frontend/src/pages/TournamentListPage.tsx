@@ -20,6 +20,8 @@ import {
   CircularProgress,
   Alert,
   SelectChangeEvent,
+  Chip,
+  Paper,
 } from '@mui/material';
 
 interface Tournament {
@@ -28,32 +30,35 @@ interface Tournament {
   description: string;
   start_date: string;
   end_date: string;
-  registration_deadline: string | null;
+  registration_deadline: string;
   max_participants: number;
-  participants_count: number;
+  current_participants: number;
   status: string;
   format: string;
   game: string;
   rules: string;
-  prizes: string;
+  prize_pool: string;
   address: string;
+  created_at: string;
+  updated_at: string;
   organizer: {
     id: number;
-    username: string;
+    name: string;
   };
 }
 
 const statusOptions = [
-  { value: 'all', label: 'All' },
-  { value: 'preparation', label: 'Preparation' },
-  { value: 'ongoing', label: 'Ongoing' },
-  { value: 'finished', label: 'Finished' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'all', label: 'Tous' },
+  { value: 'upcoming', label: 'À venir' },
+  { value: 'ongoing', label: 'En cours' },
+  { value: 'completed', label: 'Terminé' },
+  { value: 'cancelled', label: 'Annulé' },
 ];
 
 const TournamentListPage: React.FC = () => {
   const { user } = useAuth();
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [allTournaments, setAllTournaments] = useState<Tournament[]>([]);
+  const [filteredTournaments, setFilteredTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,16 +73,15 @@ const TournamentListPage: React.FC = () => {
       setError('');
       const response = await getTournaments({
         page,
-        per_page: 10,
-        search: searchTerm,
-        status: filterStatus,
+        per_page: 100,
+        status: filterStatus === 'all' ? '' : filterStatus,
       });
-      setTournaments(response.tournaments);
+      setAllTournaments(response.tournaments);
       setTotalPages(response.pages);
       setTotalItems(response.total);
     } catch (err) {
-      setError('Failed to load tournaments');
-      console.error('Error fetching tournaments:', err);
+      setError('Échec du chargement des tournois');
+      console.error('Erreur lors du chargement des tournois:', err);
     } finally {
       setLoading(false);
     }
@@ -85,16 +89,25 @@ const TournamentListPage: React.FC = () => {
 
   useEffect(() => {
     fetchTournaments();
-  }, [page, searchTerm, filterStatus]);
+  }, [page, filterStatus]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
+  useEffect(() => {
+    const filtered = allTournaments.filter(tournament => {
+      const matchesSearch =
+        tournament.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        tournament.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || tournament.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    });
+    setFilteredTournaments(filtered);
+  }, [allTournaments, searchTerm, filterStatus]);
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   };
 
   const handleStatusChange = (event: SelectChangeEvent) => {
     setFilterStatus(event.target.value);
-    setPage(1);
   };
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
@@ -103,11 +116,11 @@ const TournamentListPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'preparation':
+      case 'upcoming':
         return 'info';
       case 'ongoing':
         return 'success';
-      case 'finished':
+      case 'completed':
         return 'warning';
       case 'cancelled':
         return 'error';
@@ -117,7 +130,11 @@ const TournamentListPage: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
   };
 
   if (loading) {
@@ -132,30 +149,30 @@ const TournamentListPage: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Typography variant="h4" component="h1">
-          Tournaments
+          Tournois
         </Typography>
         {user && (
           <Button component={Link} to="/tournaments/create" variant="contained" color="primary">
-            Create Tournament
+            Créer un tournoi
           </Button>
         )}
       </Box>
 
-      <Box mb={4}>
+      <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Box sx={{ flex: '1 1 300px' }}>
             <TextField
               fullWidth
-              label="Search tournaments"
+              label="Rechercher des tournois"
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && handleSearch(e)}
+              onChange={handleSearch}
+              placeholder="Nom du tournoi..."
             />
           </Box>
           <Box sx={{ flex: '1 1 300px' }}>
             <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select value={filterStatus} onChange={handleStatusChange} label="Status">
+              <InputLabel>Statut</InputLabel>
+              <Select value={filterStatus} onChange={handleStatusChange} label="Statut">
                 {statusOptions.map(option => (
                   <MenuItem key={option.value} value={option.value}>
                     {option.label}
@@ -165,7 +182,7 @@ const TournamentListPage: React.FC = () => {
             </FormControl>
           </Box>
         </Box>
-      </Box>
+      </Paper>
 
       {error && (
         <Alert severity="error" sx={{ mb: 4 }}>
@@ -173,44 +190,84 @@ const TournamentListPage: React.FC = () => {
         </Alert>
       )}
 
-      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-        {tournaments.map(tournament => (
-          <Box key={tournament.id} sx={{ flex: '1 1 300px', maxWidth: '100%' }}>
-            <Card>
-              <CardContent>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
+          gap: 3,
+        }}
+      >
+        {filteredTournaments.map(tournament => (
+          <Card
+            key={tournament.id}
+            sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                 <Typography variant="h6" component="h2" gutterBottom>
                   {tournament.name}
                 </Typography>
-                <Typography color="textSecondary" gutterBottom>
-                  Organized by {tournament.organizer.username}
-                </Typography>
-                <Typography variant="body2" paragraph>
-                  {tournament.description?.slice(0, 100)}
-                  {tournament.description?.length > 100 ? '...' : ''}
+                <Chip
+                  label={
+                    statusOptions.find(opt => opt.value === tournament.status)?.label ||
+                    tournament.status
+                  }
+                  color={getStatusColor(tournament.status)}
+                  size="small"
+                />
+              </Box>
+              <Typography color="textSecondary" gutterBottom>
+                Organisé par {tournament.organizer.name}
+              </Typography>
+              <Typography variant="body2" paragraph>
+                {tournament.description?.slice(0, 100)}
+                {tournament.description?.length > 100 ? '...' : ''}
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Début: {formatDate(tournament.start_date)}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  Start: {formatDate(tournament.start_date)}
+                  Fin: {formatDate(tournament.end_date)}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  End: {formatDate(tournament.end_date)}
+                  Date limite d'inscription:{' '}
+                  {tournament.registration_deadline
+                    ? formatDate(tournament.registration_deadline)
+                    : 'Non spécifiée'}
                 </Typography>
+              </Box>
+              <Box
+                sx={{
+                  mt: 2,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
                 <Typography variant="body2">
-                  Participants: {tournament.participants_count} /{' '}
+                  Participants: {tournament.current_participants} /{' '}
                   {tournament.max_participants || '∞'}
                 </Typography>
-              </CardContent>
-              <CardActions>
-                <Button
-                  component={Link}
-                  to={`/tournaments/${tournament.id}`}
-                  size="small"
-                  color="primary"
-                >
-                  View Details
-                </Button>
-              </CardActions>
-            </Card>
-          </Box>
+                {tournament.prize_pool && (
+                  <Typography variant="body2" color="primary">
+                    Prix: {tournament.prize_pool}€
+                  </Typography>
+                )}
+              </Box>
+            </CardContent>
+            <CardActions>
+              <Button
+                component={Link}
+                to={`/tournaments/${tournament.id}`}
+                size="small"
+                color="primary"
+                fullWidth
+              >
+                Voir les détails
+              </Button>
+            </CardActions>
+          </Card>
         ))}
       </Box>
 

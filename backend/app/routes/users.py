@@ -12,7 +12,7 @@ bp = Blueprint("users", __name__)
 @bp.route("/profile", methods=["GET"])
 @jwt_required()
 def get_profile():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     user = User.query.get_or_404(current_user_id)
     return jsonify(user.to_dict()), 200
 
@@ -21,7 +21,7 @@ def get_profile():
 @bp.route("/profile", methods=["PUT"])
 @jwt_required()
 def update_profile():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     user = User.query.get_or_404(current_user_id)
     data = request.get_json()
 

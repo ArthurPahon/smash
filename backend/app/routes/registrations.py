@@ -45,7 +45,7 @@ def get_tournament_registrations(tournament_id):
 @bp.route('/tournaments/<int:tournament_id>/registrations', methods=['POST'])
 @jwt_required()
 def register_for_tournament(tournament_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     # Check if tournament exists
     tournament = Tournament.query.get_or_404(tournament_id)
@@ -107,7 +107,7 @@ def get_registration(registration_id):
 @bp.route('/registrations/<int:registration_id>', methods=['PUT'])
 @jwt_required()
 def update_registration(registration_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     registration = Registration.query.get_or_404(registration_id)
 
     # Permission check
@@ -138,7 +138,7 @@ def update_registration(registration_id):
 @bp.route('/registrations/<int:registration_id>', methods=['DELETE'])
 @jwt_required()
 def cancel_registration(registration_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     registration = Registration.query.get_or_404(registration_id)
 
     # Permission check

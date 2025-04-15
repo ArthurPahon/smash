@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from app import db
 from app.models import Ranking, Tournament, User, Match, Registration
 
@@ -54,7 +54,6 @@ def get_global_rankings():
 
 
 @bp.route('/tournaments/<int:tournament_id>', methods=['GET'])
-@jwt_required()
 def get_tournament_rankings(tournament_id):
     # Vérification si le tournoi existe
     tournament = Tournament.query.get_or_404(tournament_id)
@@ -85,7 +84,6 @@ def get_tournament_rankings(tournament_id):
 
 
 @bp.route('/users/<int:user_id>', methods=['GET'])
-@jwt_required()
 def get_user_rankings(user_id):
     # Vérification si l'utilisateur existe
     user = User.query.get_or_404(user_id)
@@ -116,7 +114,6 @@ def get_user_rankings(user_id):
 
 
 @bp.route('/tournaments/<int:tournament_id>/calculate', methods=['POST'])
-@jwt_required()
 def calculate_tournament_rankings(tournament_id):
     # Vérification si le tournoi existe
     tournament = Tournament.query.get_or_404(tournament_id)
