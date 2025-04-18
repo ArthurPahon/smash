@@ -1,10 +1,10 @@
-from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app import db
-from app.models import Registration, Tournament, User
+from app.dao import RegistrationDAO, TournamentDAO
 
 bp = Blueprint('registrations', __name__)
+registration_dao = RegistrationDAO()
+tournament_dao = TournamentDAO()
 
 @bp.route('/tournaments/<int:tournament_id>/registrations', methods=['GET'])
 @jwt_required()
@@ -16,29 +16,22 @@ def get_tournament_registrations(tournament_id):
     # Filters
     status = request.args.get('status', '')
 
-    query = Registration.query.filter_by(tournament_id=tournament_id)
-    if status:
-        query = query.filter_by(status=status)
+    # Vérifier si le tournoi existe
+    tournament = tournament_dao.get_by_id(tournament_id)
+    if not tournament:
+        return jsonify({'error': 'Tournament not found'}), 404
 
-    pagination = query.paginate(page=page, per_page=per_page)
-    registrations = pagination.items
+    registrations = registration_dao.get_by_tournament(
+        tournament_id,
+        status=status,
+        page=page,
+        per_page=per_page
+    )
 
     return jsonify({
-        'registrations': [{
-            'id': r.id,
-            'user_id': r.user_id,
-            'tournament_id': r.tournament_id,
-            'registration_date': r.registration_date.isoformat(),
-            'status': r.status,
-            'seed': r.seed,
-            'user': {
-                'id': r.user.id,
-                'name': r.user.name,
-                'profile_picture': r.user.profile_picture
-            }
-        } for r in registrations],
-        'total': pagination.total,
-        'pages': pagination.pages,
+        'registrations': registrations['items'],
+        'total': registrations['total'],
+        'pages': registrations['pages'],
         'current_page': page
     }), 200
 
@@ -47,105 +40,93 @@ def get_tournament_registrations(tournament_id):
 def register_for_tournament(tournament_id):
     current_user_id = int(get_jwt_identity())
 
-    # Check if tournament exists
-    tournament = Tournament.query.get_or_404(tournament_id)
+    # Vérifier si le tournoi existe
+    tournament = tournament_dao.get_by_id(tournament_id)
+    if not tournament:
+        return jsonify({'error': 'Tournament not found'}), 404
 
-    # Check if user is already registered
-    existing_registration = Registration.query.filter_by(
-        user_id=current_user_id,
-        tournament_id=tournament_id
-    ).first()
-
-    if existing_registration:
-        return jsonify({'error': 'You are already registered for this tournament'}), 400
-
-    # Create registration
-    registration = Registration(
-        user_id=current_user_id,
-        tournament_id=tournament_id,
-        registration_date=datetime.utcnow(),
-        status='confirmed'
+    # Vérifier si l'utilisateur est déjà inscrit
+    existing_registration = registration_dao.get_by_user_and_tournament(
+        current_user_id,
+        tournament_id
     )
 
-    db.session.add(registration)
-    db.session.commit()
+    if existing_registration:
+        return jsonify({
+            'error': 'You are already registered for this tournament'
+        }), 400
 
-    return jsonify({
-        'id': registration.id,
-        'user_id': registration.user_id,
-        'tournament_id': registration.tournament_id,
-        'registration_date': registration.registration_date.isoformat(),
-        'status': registration.status,
-        'seed': registration.seed
-    }), 201
+    try:
+        # Créer l'inscription
+        registration = registration_dao.create({
+            'user_id': current_user_id,
+            'tournament_id': tournament_id,
+            'status': 'confirmed'
+        })
+
+        return jsonify(registration), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @bp.route('/registrations/<int:registration_id>', methods=['GET'])
 @jwt_required()
 def get_registration(registration_id):
-    registration = Registration.query.get_or_404(registration_id)
+    registration = registration_dao.get_by_id(registration_id)
+    if not registration:
+        return jsonify({'error': 'Registration not found'}), 404
 
-    return jsonify({
-        'id': registration.id,
-        'user_id': registration.user_id,
-        'tournament_id': registration.tournament_id,
-        'registration_date': registration.registration_date.isoformat(),
-        'status': registration.status,
-        'seed': registration.seed,
-        'user': {
-            'id': registration.user.id,
-            'name': registration.user.name,
-            'profile_picture': registration.user.profile_picture
-        },
-        'tournament': {
-            'id': registration.tournament.id,
-            'name': registration.tournament.name,
-            'start_date': registration.tournament.start_date.isoformat(),
-            'end_date': registration.tournament.end_date.isoformat()
-        }
-    }), 200
+    return jsonify(registration), 200
 
 @bp.route('/registrations/<int:registration_id>', methods=['PUT'])
 @jwt_required()
 def update_registration(registration_id):
     current_user_id = int(get_jwt_identity())
-    registration = Registration.query.get_or_404(registration_id)
+    registration = registration_dao.get_by_id(registration_id)
 
-    # Permission check
-    if registration.user_id != current_user_id:
+    if not registration:
+        return jsonify({'error': 'Registration not found'}), 404
+
+    # Vérification des permissions
+    if registration['user_id'] != current_user_id:
         return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json()
+    update_data = {}
 
-    # Update fields
+    # Mise à jour des champs
     if 'status' in data:
         if data['status'] not in ['confirmed', 'cancelled', 'waiting_list']:
             return jsonify({'error': 'Invalid status'}), 400
-        registration.status = data['status']
+        update_data['status'] = data['status']
     if 'seed' in data:
-        registration.seed = data['seed']
+        update_data['seed'] = data['seed']
 
-    db.session.commit()
-
-    return jsonify({
-        'id': registration.id,
-        'user_id': registration.user_id,
-        'tournament_id': registration.tournament_id,
-        'registration_date': registration.registration_date.isoformat(),
-        'status': registration.status,
-        'seed': registration.seed
-    }), 200
+    try:
+        updated_registration = registration_dao.update(
+            registration_id,
+            update_data
+        )
+        return jsonify(updated_registration), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @bp.route('/registrations/<int:registration_id>', methods=['DELETE'])
 @jwt_required()
 def cancel_registration(registration_id):
     current_user_id = int(get_jwt_identity())
-    registration = Registration.query.get_or_404(registration_id)
+    registration = registration_dao.get_by_id(registration_id)
 
-    # Permission check
-    if registration.user_id != current_user_id:
+    if not registration:
+        return jsonify({'error': 'Registration not found'}), 404
+
+    # Vérification des permissions
+    if registration['user_id'] != current_user_id:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    db.session.delete(registration)
-    db.session.commit()
-
-    return jsonify({'message': 'Registration cancelled successfully'}), 200
+    try:
+        registration_dao.delete(registration_id)
+        return jsonify({
+            'message': 'Registration cancelled successfully'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400

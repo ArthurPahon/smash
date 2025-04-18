@@ -5,11 +5,12 @@ from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required
 )
-from app import db
-from app.models import User
+from app.dao import UserDAO
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Création du Blueprint pour les routes d'authentification
 bp = Blueprint("auth", __name__)
+user_dao = UserDAO()
 
 
 # Route pour l'inscription d'un utilisateur
@@ -24,29 +25,25 @@ def register():
             return jsonify({'error': f'Le champ {field} est requis'}), 400
 
     # Vérification si l'email existe déjà
-    if User.query.filter_by(email=data['email']).first():
+    if user_dao.get_by_email(data['email']):
         return jsonify({'error': 'Cet email est déjà utilisé'}), 400
 
+    # Préparation des données utilisateur
+    user_data = {
+        'name': data['name'],
+        'email': data['email'],
+        'password': generate_password_hash(data['password']),
+        'profile_picture': data.get('profile_picture'),
+        'country': data.get('country'),
+        'state': data.get('state')
+    }
+
     # Création du nouvel utilisateur
-    user = User(
-        name=data['name'],
-        email=data['email'],
-        password=data['password'],
-        profile_picture=data.get('profile_picture')
-    )
-
-    # Ajout du pays et de l'état si fournis
-    if 'country' in data:
-        user.country = data['country']
-    if 'state' in data:
-        user.state = data['state']
-
-    db.session.add(user)
-    db.session.commit()
+    user_id = user_dao.create(user_data)
 
     return jsonify({
         'message': 'Utilisateur créé avec succès',
-        'user_id': user.id
+        'user_id': user_id
     }), 201
 
 
@@ -58,20 +55,22 @@ def login():
     if not data or 'email' not in data or 'password' not in data:
         return jsonify({'error': 'Email et mot de passe requis'}), 400
 
-    user = User.query.filter_by(email=data['email']).first()
+    user = user_dao.get_by_email(data['email'])
 
-    if not user or not user.check_password(data['password']):
+    if not user or not check_password_hash(user['password'], data['password']):
         return jsonify({'error': 'Email ou mot de passe incorrect'}), 401
 
     # Création du token JWT
     access_token = create_access_token(
-        identity=str(user.id),
+        identity=str(user['id']),
         expires_delta=timedelta(days=1)
     )
 
+    # Suppression du mot de passe avant d'envoyer les données
+    user.pop('password', None)
     return jsonify({
         'access_token': access_token,
-        'user': user.to_dict()
+        'user': user
     }), 200
 
 
@@ -87,12 +86,14 @@ def logout():
 @jwt_required()
 def get_current_user():
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    user = user_dao.get_by_id(user_id)
 
     if not user:
         return jsonify({'error': 'Utilisateur non trouvé'}), 404
 
-    return jsonify(user.to_dict()), 200
+    # Suppression du mot de passe avant d'envoyer les données
+    user.pop('password', None)
+    return jsonify(user), 200
 
 
 @bp.route("/password", methods=["PUT"])
@@ -104,13 +105,14 @@ def change_password():
     if not data or 'old_password' not in data or 'new_password' not in data:
         return jsonify({'error': 'Ancien et nouveau mot de passe requis'}), 400
 
-    user = User.query.get(user_id)
+    user = user_dao.get_by_id(user_id)
 
-    if not user.check_password(data['old_password']):
+    if not user or not check_password_hash(user['password'], data['old_password']):
         return jsonify({'error': 'Ancien mot de passe incorrect'}), 401
 
-    user.set_password(data['new_password'])
-    db.session.commit()
+    user_dao.update(user_id, {
+        'password': generate_password_hash(data['new_password'])
+    })
 
     return jsonify({'message': 'Mot de passe modifié avec succès'}), 200
 
@@ -122,7 +124,7 @@ def request_password_reset():
     if not data or 'email' not in data:
         return jsonify({'error': 'Email requis'}), 400
 
-    user = User.query.filter_by(email=data['email']).first()
+    user = user_dao.get_by_email(data['email'])
 
     if not user:
         # Pour des raisons de sécurité, on renvoie toujours un succès

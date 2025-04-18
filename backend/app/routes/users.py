@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from app import db
-from app.models import User, Tournament, Match
-from sqlalchemy import or_
+from app.dao import UserDAO, TournamentDAO, MatchDAO
 
 # Création du Blueprint pour les routes utilisateurs
 bp = Blueprint("users", __name__)
+user_dao = UserDAO()
+tournament_dao = TournamentDAO()
+match_dao = MatchDAO()
 
 
 # Route pour obtenir le profil de l'utilisateur
@@ -13,8 +14,10 @@ bp = Blueprint("users", __name__)
 @jwt_required()
 def get_profile():
     current_user_id = int(get_jwt_identity())
-    user = User.query.get_or_404(current_user_id)
-    return jsonify(user.to_dict()), 200
+    user = user_dao.get_by_id(current_user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify(user), 200
 
 
 # Route pour mettre à jour le profil
@@ -22,20 +25,27 @@ def get_profile():
 @jwt_required()
 def update_profile():
     current_user_id = int(get_jwt_identity())
-    user = User.query.get_or_404(current_user_id)
+    user = user_dao.get_by_id(current_user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
     data = request.get_json()
+    update_data = {}
 
     if 'name' in data:
-        user.name = data['name']
+        update_data['name'] = data['name']
     if 'profile_picture' in data:
-        user.profile_picture = data['profile_picture']
+        update_data['profile_picture'] = data['profile_picture']
     if 'country' in data:
-        user.country = data['country']
+        update_data['country'] = data['country']
     if 'state' in data:
-        user.state = data['state']
+        update_data['state'] = data['state']
 
-    db.session.commit()
-    return jsonify(user.to_dict()), 200
+    try:
+        updated_user = user_dao.update(current_user_id, update_data)
+        return jsonify(updated_user), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @bp.route('', methods=['GET'])
@@ -48,17 +58,12 @@ def get_users():
     # Filtres
     search = request.args.get('search', '')
 
-    query = User.query
-    if search:
-        query = query.filter(User.name.ilike(f'%{search}%'))
-
-    pagination = query.paginate(page=page, per_page=per_page)
-    users = pagination.items
+    users = user_dao.search(search, page=page, per_page=per_page)
 
     return jsonify({
-        'users': [user.to_dict() for user in users],
-        'total': pagination.total,
-        'pages': pagination.pages,
+        'users': users['items'],
+        'total': users['total'],
+        'pages': users['pages'],
         'current_page': page
     }), 200
 
@@ -66,33 +71,45 @@ def get_users():
 @bp.route('/<int:user_id>', methods=['GET'])
 @jwt_required()
 def get_user(user_id):
-    user = User.query.get_or_404(user_id)
-    return jsonify(user.to_dict()), 200
+    user = user_dao.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify(user), 200
 
 
 @bp.route('/<int:user_id>', methods=['PUT'])
 @jwt_required()
 def update_user(user_id):
-    user = User.query.get_or_404(user_id)
+    current_user_id = int(get_jwt_identity())
+    if current_user_id != user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = user_dao.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
     data = request.get_json()
 
-    if not user.check_password(data.get('current_password')):
+    if not user_dao.check_password(user_id, data.get('current_password')):
         return jsonify({
-            'error': ('Mot de passe actuel incorrect')
+            'error': 'Mot de passe actuel incorrect'
         }), 400
 
-    # Mise à jour des champs
+    update_data = {}
     if 'name' in data:
-        user.name = data['name']
+        update_data['name'] = data['name']
     if 'profile_picture' in data:
-        user.profile_picture = data['profile_picture']
+        update_data['profile_picture'] = data['profile_picture']
     if 'country' in data:
-        user.country = data['country']
+        update_data['country'] = data['country']
     if 'state' in data:
-        user.state = data['state']
+        update_data['state'] = data['state']
 
-    db.session.commit()
-    return jsonify(user.to_dict()), 200
+    try:
+        updated_user = user_dao.update(user_id, update_data)
+        return jsonify(updated_user), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @bp.route('/<int:user_id>/tournaments', methods=['GET'])
@@ -102,18 +119,16 @@ def get_user_tournaments(user_id):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
 
-    # Récupération des tournois via les inscriptions
-    query = Tournament.query.join(Tournament.registrations).filter(
-        Tournament.registrations.any(user_id=user_id)
+    tournaments = tournament_dao.get_by_participant(
+        user_id,
+        page=page,
+        per_page=per_page
     )
 
-    pagination = query.paginate(page=page, per_page=per_page)
-    tournaments = pagination.items
-
     return jsonify({
-        'tournaments': [t.to_dict() for t in tournaments],
-        'total': pagination.total,
-        'pages': pagination.pages,
+        'tournaments': tournaments['items'],
+        'total': tournaments['total'],
+        'pages': tournaments['pages'],
         'current_page': page
     }), 200
 
@@ -121,40 +136,15 @@ def get_user_tournaments(user_id):
 @bp.route('/<int:user_id>/stats', methods=['GET'])
 @jwt_required()
 def get_user_stats(user_id):
-    # Statistiques des matchs
-    total_matches = Match.query.filter(
-        or_(
-            Match.player1_id == user_id,
-            Match.player2_id == user_id
-        ),
-        Match.status == 'finished'
-    ).count()
+    # Vérifier si l'utilisateur existe
+    user = user_dao.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
 
-    victories = Match.query.filter(
-        Match.winner_id == user_id,
-        Match.status == 'finished'
-    ).count()
+    # Récupérer les statistiques
+    stats = user_dao.get_statistics(user_id)
 
-    win_rate = (victories / total_matches * 100) if total_matches > 0 else 0
-
-    # Statistiques des tournois
-    tournaments_participated = Tournament.query.join(
-        Tournament.registrations
-    ).filter(
-        Tournament.registrations.any(user_id=user_id)
-    ).count()
-
-    return jsonify({
-        'matches': {
-            'total': total_matches,
-            'won': victories,
-            'lost': total_matches - victories,
-            'win_rate': round(win_rate, 2)
-        },
-        'tournaments': {
-            'participated': tournaments_participated
-        }
-    }), 200
+    return jsonify(stats), 200
 
 
 @bp.route('/<int:user_id>/matches', methods=['GET'])
@@ -164,17 +154,15 @@ def get_user_matches(user_id):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
 
-    # Récupération des matchs où l'utilisateur est joueur1 ou joueur2
-    query = Match.query.filter(
-        (Match.player1_id == user_id) | (Match.player2_id == user_id)
-    ).order_by(Match.id.desc())
-
-    pagination = query.paginate(page=page, per_page=per_page)
-    matches = pagination.items
+    matches = match_dao.get_by_player(
+        user_id,
+        page=page,
+        per_page=per_page
+    )
 
     return jsonify({
-        'matches': [m.to_dict() for m in matches],
-        'total': pagination.total,
-        'pages': pagination.pages,
+        'matches': matches['items'],
+        'total': matches['total'],
+        'pages': matches['pages'],
         'current_page': page
     }), 200
